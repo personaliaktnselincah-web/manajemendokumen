@@ -1193,7 +1193,6 @@
             document.getElementById('editBaPenyerah').value = row.nama_penyerah || '';
             document.getElementById('editBaKeterangan').value = row.keterangan || '';
 
-            // MUAT KELENGKAPAN KE MODAL EDIT
             if (row.kelengkapan_data) {
                 const editRows = document.querySelectorAll('#editChecklistTable tbody tr');
                 editRows.forEach((tr, idx) => {
@@ -1224,7 +1223,6 @@
         async function simpanUpdateBeritaAcara() {
             const id = document.getElementById('editBaId').value;
             
-            // AMBIL DATA KELENGKAPAN DARI MODAL EDIT
             let kelengkapanData = [];
             const editRows = document.querySelectorAll('#editChecklistTable tbody tr');
             editRows.forEach(tr => {
@@ -1279,9 +1277,10 @@
             }
         }
 
-        async function cetakBeritaAcaraDariDB(row) {
-            showLoading("Menyiapkan dokumen cetak...");
+  async function cetakBeritaAcaraDariDB(row) {
+            showLoading("Menyiapkan dokumen & mengunduh foto dari database...");
 
+            // 1. Masukkan data teks ke form Menu 1
             document.getElementById('baMerk').value = row.merk || 'HINO';
             document.getElementById('baNopol').value = row.nopol || '';
             document.getElementById('baWarna').value = row.warna || 'HIJAU';
@@ -1311,7 +1310,6 @@
                 editableDiv.innerHTML = ketText;
             }
 
-            // MUAT KEMBALI DATA KELENGKAPAN KE HALAMAN UTAMA CETAK
             if (row.kelengkapan_data) {
                 const rows = document.querySelectorAll('.checklist-table tbody tr');
                 rows.forEach((tr, idx) => {
@@ -1332,47 +1330,88 @@
                 });
             }
 
-            if (row.foto_1) {
-                const canvas1 = document.getElementById('canvas1');
-                const ctx1 = canvas1.getContext('2d');
-                const img1 = new Image();
-                img1.crossOrigin = "anonymous";
-                img1.onload = function() {
-                    canvas1.width = canvas1.offsetWidth || 350;
-                    canvas1.height = canvas1.offsetHeight || 360;
-                    ctx1.fillStyle = "#ffffff";
-                    ctx1.fillRect(0, 0, canvas1.width, canvas1.height);
-                    ctx1.drawImage(img1, 0, 0, canvas1.width, canvas1.height);
-                    const placeholder = canvas1.parentElement.querySelector('.placeholder-text');
-                    if (placeholder) placeholder.style.display = 'none';
-                };
-                img1.src = row.foto_1;
+            // 2. Tentukan apakah ini template 4 foto atau 2 foto
+            const isFourPhotos = (row.foto_3 && row.foto_3.trim() !== "") || (row.foto_4 && row.foto_4.trim() !== "");
+            
+            if (isFourPhotos) {
+                switchTemplate('4');
+            } else {
+                switchTemplate('2');
             }
 
-            if (row.foto_2) {
-                const canvas2 = document.getElementById('canvas2');
-                const ctx2 = canvas2.getContext('2d');
-                const img2 = new Image();
-                img2.crossOrigin = "anonymous";
-                img2.onload = function() {
-                    canvas2.width = canvas2.offsetWidth || 350;
-                    canvas2.height = canvas2.offsetHeight || 360;
-                    ctx2.fillStyle = "#ffffff";
-                    ctx2.fillRect(0, 0, canvas2.width, canvas2.height);
-                    ctx2.drawImage(img2, 0, 0, canvas2.width, canvas2.height);
-                    const placeholder = canvas2.parentElement.querySelector('.placeholder-text');
-                    if (placeholder) placeholder.style.display = 'none';
-                };
-                img2.src = row.foto_2;
-            }
-
+            // Pindah tampilan ke tab Generator (Menu 1) agar elemen kanvas aktif dan dikenali DOM
             document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
             document.getElementById('view-generator').classList.add('active');
 
+            // Beri jeda sejenak agar browser selesai merender ukuran layout CSS container foto
+            await new Promise(resolve => setTimeout(resolve, 150));
+
+            // 3. Fungsi helper async untuk mendownload dan merender gambar ke kanvas
+            function loadImageToCanvasAsync(canvasId, imageUrl) {
+                return new Promise((resolve) => {
+                    const canvas = document.getElementById(canvasId);
+                    if (!canvas || !imageUrl || imageUrl.trim() === "" || imageUrl === "NULL") {
+                        resolve();
+                        return;
+                    }
+                    
+                    // Paksa ukuran kanvas mengikuti lebar/tinggi elemen aslinya
+                    canvas.width = canvas.offsetWidth || (isFourPhotos ? 350 : 350);
+                    canvas.height = canvas.offsetHeight || (isFourPhotos ? 420 : 360);
+                    
+                    const ctx = canvas.getContext('2d');
+                    const img = new Image();
+                    img.crossOrigin = "anonymous";
+                    
+                    img.onload = function() {
+                        ctx.fillStyle = "#ffffff";
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        
+                        let hRatio = canvas.width / img.width;
+                        let vRatio = canvas.height / img.height;
+                        let ratio = Math.min(hRatio, vRatio);
+                        let centerShiftX = (canvas.width - img.width * ratio) / 2;
+                        let centerShiftY = (canvas.height - img.height * ratio) / 2;
+                        
+                        ctx.drawImage(img, 0, 0, img.width, img.height, centerShiftX, centerShiftY, img.width * ratio, img.height * ratio);
+                        
+                        const placeholder = canvas.parentElement.querySelector('.placeholder-text');
+                        if (placeholder) placeholder.style.display = 'none';
+                        resolve();
+                    };
+                    
+                    img.onerror = function() {
+                        console.error("Gagal memuat gambar dari URL:", imageUrl);
+                        resolve();
+                    };
+                    
+                    img.src = imageUrl;
+                });
+            }
+
+            // 4. Tunggu SEMUA foto selesai di-load ke kanvas secara bersamaan
+            if (isFourPhotos) {
+                await Promise.all([
+                    loadImageToCanvasAsync('canvas4_1', row.foto_1),
+                    loadImageToCanvasAsync('canvas4_2', row.foto_2),
+                    loadImageToCanvasAsync('canvas4_3', row.foto_3),
+                    loadImageToCanvasAsync('canvas4_4', row.foto_4)
+                ]);
+            } else {
+                await Promise.all([
+                    loadImageToCanvasAsync('canvas1', row.foto_1),
+                    loadImageToCanvasAsync('canvas2', row.foto_2)
+                ]);
+            }
+
+            // 5. Setelah semua foto benar-benar siap, tutup loading dan cetak
+            hideLoading();
+            
+            // Jeda ekstra 300ms untuk memastikan kestabilan frame browser sebelum dialog print muncul
             setTimeout(() => {
-                hideLoading();
                 window.print();
 
+                // Kembalikan posisi aktif ke Menu 4 (Riwayat) setelah selesai mencetak
                 setTimeout(() => {
                     document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
                     document.getElementById('view-history-ba').classList.add('active');
@@ -1384,7 +1423,7 @@
                     document.getElementById('pageTitle').textContent = '4. Riwayat Berita Acara';
                 }, 500);
 
-            }, 1000);
+            }, 300);
         }
 
         async function compressImage(file, maxWidth = 1024, maxHeight = 1024, quality = 0.7) {
@@ -1473,12 +1512,23 @@
                 });
             });
 
+            const isTemplate4Active = document.getElementById('btnTemplate4').classList.contains('active');
+
             showLoading("Mengunggah foto dan menyimpan Berita Acara...");
             try {
-                const urlFoto1 = await uploadCanvasKeStorage('canvas1', 'berita-acara', nopol);
-                const urlFoto2 = await uploadCanvasKeStorage('canvas2', 'berita-acara', nopol);
-                const urlFoto3 = await uploadCanvasKeStorage('canvas4_3', 'berita-acara', nopol);
-                const urlFoto4 = await uploadCanvasKeStorage('canvas4_4', 'berita-acara', nopol);
+                let urlFoto1, urlFoto2, urlFoto3, urlFoto4;
+
+                if (isTemplate4Active) {
+                    urlFoto1 = await uploadCanvasKeStorage('canvas4_1', 'berita-acara', nopol);
+                    urlFoto2 = await uploadCanvasKeStorage('canvas4_2', 'berita-acara', nopol);
+                    urlFoto3 = await uploadCanvasKeStorage('canvas4_3', 'berita-acara', nopol);
+                    urlFoto4 = await uploadCanvasKeStorage('canvas4_4', 'berita-acara', nopol);
+                } else {
+                    urlFoto1 = await uploadCanvasKeStorage('canvas1', 'berita-acara', nopol);
+                    urlFoto2 = await uploadCanvasKeStorage('canvas2', 'berita-acara', nopol);
+                    urlFoto3 = null;
+                    urlFoto4 = null;
+                }
 
                 const dataPayload = {
                     tanggal_ba: new Date().toISOString().split('T')[0],
@@ -1500,7 +1550,7 @@
                 const { error } = await supabaseClient.from('berita_acara').insert([dataPayload]);
                 if (error) throw error;
                 hideLoading();
-                alert("Berita Acara berhasil disimpan ke database Supabase beserta data kelengkapannya!");
+                alert("Berita Acara berhasil disimpan ke database Supabase beserta seluruh lampiran fotonya!");
             } catch (err) {
                 hideLoading();
                 alert("Gagal menyimpan Berita Acara: " + err.message);

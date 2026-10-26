@@ -173,7 +173,7 @@
             display: block;
         }
 
-        /* SUB-MENU TABS STYLE (UNTUK MENU 3) */
+        /* SUB-MENU TABS STYLE */
         .sub-menu-tabs {
             display: flex;
             gap: 10px;
@@ -634,7 +634,7 @@
             cursor: pointer; 
         }
 
-        /* CSS BA GENERATOR (TETAP AMAN UNTUK CETAK) */
+        /* CSS BA GENERATOR */
         @page {
             size: 215mm 330mm;
             margin: 12mm 12mm 6mm 10mm;
@@ -703,6 +703,7 @@
             body { background: #fff !important; margin: 0 !important; padding: 0 !important; display: block !important; height: auto !important; overflow: visible !important; }
             aside, header, .template-selector, .btn-container, .shape-toolbar, .no-print, .modal-overlay, .sidebar-footer, #authContainer { display: none !important; }
             
+            /* KONDISI 1: JIKA SEDANG CETAK BERITA ACARA */
             body:not(.printing-asuransi) #appLayout { display: block !important; width: 100% !important; position: absolute !important; top: 0 !important; left: 0 !important; height: auto !important; overflow: visible !important; }
             body:not(.printing-asuransi) main { display: block !important; width: 100% !important; position: absolute !important; top: 0 !important; left: 0 !important; }
             body:not(.printing-asuransi) .content-body { padding: 0 !important; background: #fff !important; overflow: visible !important; }
@@ -716,6 +717,28 @@
             body:not(.printing-asuransi) .checklist-table input[type="radio"] { display: none !important; }
             body:not(.printing-asuransi) .checklist-table input[type="radio"]:checked + .print-check { display: block !important; }
             
+            #view-generator:not(:has(#btnTemplate4.active)) #pageFoto4 {
+                display: none !important;
+            }
+            body:not(.printing-asuransi) #mainPageContainer {
+                page-break-after: always !important;
+                break-after: page !important;
+                page-break-inside: avoid !important;
+            }
+            body:not(.printing-asuransi) #pageFoto4 {
+                display: block !important;
+                page-break-before: always !important;
+                break-before: page !important;
+                page-break-inside: avoid !important;
+                width: 100% !important;
+                box-sizing: border-box !important;
+                padding-top: 5mm !important;
+            }
+            body:not(.printing-asuransi) .photo-box-large {
+                height: 350px !important;
+            }
+
+            /* KONDISI 2: JIKA SEDANG CETAK ASURANSI */
             body.printing-asuransi #appLayout, body.printing-asuransi main { display: none !important; }
             body.printing-asuransi #printContainer { display: block !important; }
             .print-page { display: block !important; position: relative !important; width: 100% !important; min-height: 100vh !important; page-break-after: always !important; break-after: page !important; }
@@ -1277,10 +1300,9 @@
             }
         }
 
-async function cetakBeritaAcaraDariDB(row) {
+        async function cetakBeritaAcaraDariDB(row) {
             showLoading("Menyiapkan dokumen & resolusi foto HD...");
 
-            // 1. Masukkan data teks ke form Menu 1
             document.getElementById('baMerk').value = row.merk || 'HINO';
             document.getElementById('baNopol').value = row.nopol || '';
             document.getElementById('baWarna').value = row.warna || 'HIJAU';
@@ -1330,7 +1352,6 @@ async function cetakBeritaAcaraDariDB(row) {
                 });
             }
 
-            // 2. Tentukan apakah template 4 foto atau 2 foto yang aktif
             const isFourPhotos = (row.foto_3 && row.foto_3.trim() !== "") || (row.foto_4 && row.foto_4.trim() !== "");
             
             if (isFourPhotos) {
@@ -1339,14 +1360,11 @@ async function cetakBeritaAcaraDariDB(row) {
                 switchTemplate('2');
             }
 
-            // Pindah tampilan ke tab Generator (Menu 1)
             document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
             document.getElementById('view-generator').classList.add('active');
 
-            // Beri jeda render DOM agar kontainer CSS siap
             await new Promise(resolve => setTimeout(resolve, 300));
 
-            // 3. Fungsi helper dengan resolusi HD (High Quality Rendering)
             function loadHdImageToCanvasAsync(canvasId, imageUrl) {
                 return new Promise((resolve) => {
                     const canvas = document.getElementById(canvasId);
@@ -1359,7 +1377,6 @@ async function cetakBeritaAcaraDariDB(row) {
                     img.crossOrigin = "anonymous";
                     
                     img.onload = function() {
-                        // Gunakan skala High-DPI (2x lipat dari ukuran kotak CSS agar sangat tajam saat dicetak)
                         const scale = 2;
                         canvas.width = (canvas.offsetWidth || (isFourPhotos ? 350 : 350)) * scale;
                         canvas.height = (canvas.offsetHeight || (isFourPhotos ? 420 : 360)) * scale;
@@ -1390,7 +1407,6 @@ async function cetakBeritaAcaraDariDB(row) {
                 });
             }
 
-            // 4. Eksekusi render HD untuk semua foto
             if (isFourPhotos) {
                 await Promise.all([
                     loadHdImageToCanvasAsync('canvas4_1', row.foto_1),
@@ -1405,13 +1421,12 @@ async function cetakBeritaAcaraDariDB(row) {
                 ]);
             }
 
-            // 5. Sembunyikan loading dan cetak dokumen
             hideLoading();
             
             setTimeout(() => {
+                document.body.classList.remove('printing-asuransi'); // Pastikan bersih dari mode asuransi
                 window.print();
 
-                // Kembalikan ke menu riwayat setelah selesai
                 setTimeout(() => {
                     document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
                     document.getElementById('view-history-ba').classList.add('active');
@@ -1425,6 +1440,7 @@ async function cetakBeritaAcaraDariDB(row) {
 
             }, 600);
         }
+
         async function compressImage(file, maxWidth = 1024, maxHeight = 1024, quality = 0.7) {
             return new Promise((resolve) => {
                 if (!file.type.startsWith('image/')) { resolve(file); return; }
@@ -1743,23 +1759,72 @@ async function cetakBeritaAcaraDariDB(row) {
             const textIds = ['textKtp', 'textSim', 'textDepan', 'textBelakang', 'textKiri', 'textKanan', 'textRangka', 'textStnk'];
 
             let loadPromises = [];
-            for (let i = 0; i < imgIds.length; i++) { loadPromises.push(setCloudImageAsync(imgIds[i], textIds[i], urlKeys[i])); }
+            for (let i = 0; i < imgIds.length; i++) { 
+                loadPromises.push(setCloudImageAsync(imgIds[i], textIds[i], urlKeys[i])); 
+            }
             await Promise.all(loadPromises);
 
             hideLoading();
             document.body.classList.add('printing-asuransi');
-            setTimeout(() => { window.print(); setTimeout(() => { document.body.classList.remove('printing-asuransi'); }, 1000); }, 500);
+            setTimeout(() => { 
+                window.print(); 
+                setTimeout(() => { 
+                    document.body.classList.remove('printing-asuransi'); 
+                }, 1000); 
+            }, 500);
         }
 
         function setCloudImageAsync(imgId, textId, url) {
             return new Promise((resolve) => {
                 const img = document.getElementById(imgId);
                 const txt = document.getElementById(textId);
-                if (url && url.trim() !== '') {
-                    img.onload = () => { img.style.display = 'block'; if(txt) txt.style.display = 'none'; resolve(); };
-                    img.onerror = () => { img.style.display = 'none'; if(txt) txt.style.display = 'block'; resolve(); };
+                
+                // Pengaman ekstra jika elemen tidak ditemukan di HTML
+                if (!img) {
+                    resolve();
+                    return;
+                }
+
+                // Timeout pengaman 5 detik agar tidak pernah loading selamanya
+                let isResolved = false;
+                const timeout = setTimeout(() => {
+                    if (!isResolved) {
+                        isResolved = true;
+                        img.style.display = 'none';
+                        if(txt) { txt.style.display = 'block'; txt.textContent = "Gagal memuat / Kosong"; }
+                        resolve();
+                    }
+                }, 5000);
+
+                if (url && url.trim() !== '' && url !== 'NULL') {
+                    img.onload = () => {
+                        if (!isResolved) {
+                            isResolved = true;
+                            clearTimeout(timeout);
+                            img.style.display = 'block';
+                            if(txt) txt.style.display = 'none';
+                            resolve();
+                        }
+                    };
+                    img.onerror = () => {
+                        if (!isResolved) {
+                            isResolved = true;
+                            clearTimeout(timeout);
+                            img.style.display = 'none';
+                            if(txt) { txt.style.display = 'block'; txt.textContent = "Gagal memuat file"; }
+                            resolve();
+                        }
+                    };
                     img.src = url;
-                } else { img.src = ''; img.style.display = 'none'; if(txt) txt.style.display = 'block'; resolve(); }
+                } else {
+                    if (!isResolved) {
+                        isResolved = true;
+                        clearTimeout(timeout);
+                        img.style.display = 'none';
+                        if(txt) { txt.style.display = 'block'; txt.textContent = "Belum ada lampiran"; }
+                        resolve();
+                    }
+                }
             });
         }
 
@@ -2198,16 +2263,14 @@ async function cetakBeritaAcaraDariDB(row) {
                     </div>
                 </section>
 
-                <!-- MENU 3: PENGATURAN & KENDARAAN (DENGAN 3 SUB-MENU / TABS) -->
+                <!-- MENU 3: PENGATURAN & KENDARAAN -->
                 <section id="view-settings" class="view-section">
-                    <!-- Navigasi Sub-Menu -->
                     <div class="sub-menu-tabs">
                         <button class="sub-tab-btn active" onclick="switchSubSettings('umum', this)">⚙️ 1. Pengaturan Operasional</button>
                         <button class="sub-tab-btn" onclick="switchSubSettings('bengkel', this)">🔧 2. Kelola Bengkel Tujuan</button>
                         <button class="sub-tab-btn" onclick="switchSubSettings('kendaraan', this)">🚛 3. Kelola & Tambah Kendaraan</button>
                     </div>
 
-                    <!-- Sub-Menu 1: Pengaturan Operasional & Perusahaan -->
                     <div id="sub-set-umum" class="sub-section active">
                         <div class="card">
                             <div class="card-header"><h3>Pengaturan Operasional & Perusahaan</h3></div>
@@ -2222,7 +2285,6 @@ async function cetakBeritaAcaraDariDB(row) {
                         </div>
                     </div>
 
-                    <!-- Sub-Menu 2: Kelola Bengkel Tujuan -->
                     <div id="sub-set-bengkel" class="sub-section">
                         <div class="card">
                             <div class="card-header"><h3>Kelola Bengkel Tujuan</h3></div>
@@ -2250,7 +2312,6 @@ async function cetakBeritaAcaraDariDB(row) {
                         </div>
                     </div>
 
-                    <!-- Sub-Menu 3: Kelola & Tambah Kendaraan -->
                     <div id="sub-set-kendaraan" class="sub-section">
                         <div class="card">
                             <div class="card-header"><h3>Cari & Kelola Kendaraan (Edit / Hapus)</h3></div>
@@ -2345,9 +2406,7 @@ async function cetakBeritaAcaraDariDB(row) {
                 <div class="form-row">
                     <div class="form-group">
                         <label>Tujuan Bengkel:</label>
-                        <select id="editBaBengkel" class="form-control">
-                            <!-- Dimuat dinamis dari master_bengkel -->
-                        </select>
+                        <select id="editBaBengkel" class="form-control"></select>
                     </div>
                     <div class="form-group"><label>Nama Penyerah:</label><input type="text" id="editBaPenyerah" class="form-control"></div>
                 </div>
@@ -2356,7 +2415,6 @@ async function cetakBeritaAcaraDariDB(row) {
                     <textarea id="editBaKeterangan" class="form-control" style="height: 80px;"></textarea>
                 </div>
 
-                <!-- TABEL KELENGKAPAN DALAM MODAL EDIT -->
                 <div class="form-group">
                     <label style="margin-bottom: 4px; font-weight: 700;">Edit Kelengkapan Kendaraan:</label>
                     <div style="overflow-x: auto;">

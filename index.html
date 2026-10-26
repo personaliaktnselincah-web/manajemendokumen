@@ -1277,8 +1277,8 @@
             }
         }
 
-  async function cetakBeritaAcaraDariDB(row) {
-            showLoading("Menyiapkan dokumen & mengunduh foto dari database...");
+async function cetakBeritaAcaraDariDB(row) {
+            showLoading("Menyiapkan dokumen & menyelaraskan tata letak 4 foto...");
 
             // 1. Masukkan data teks ke form Menu 1
             document.getElementById('baMerk').value = row.merk || 'HINO';
@@ -1296,7 +1296,7 @@
             if (baTanggal) baTanggal.value = formatTanggalIndonesia(row.tanggal_ba);
             
             const signInput = document.querySelector('.sign-table input[type="text"]');
-            if (signInput) signInput.value = row.nama_penyerah || '';
+            if (signInput) signInput.value = row.nama_penyerah || row.nama_supir || '';
 
             const editableDiv = document.querySelector('.editable-div');
             if (editableDiv) {
@@ -1330,7 +1330,7 @@
                 });
             }
 
-            // 2. Tentukan apakah ini template 4 foto atau 2 foto
+            // 2. Cek apakah ini template 4 foto atau 2 foto
             const isFourPhotos = (row.foto_3 && row.foto_3.trim() !== "") || (row.foto_4 && row.foto_4.trim() !== "");
             
             if (isFourPhotos) {
@@ -1339,15 +1339,15 @@
                 switchTemplate('2');
             }
 
-            // Pindah tampilan ke tab Generator (Menu 1) agar elemen kanvas aktif dan dikenali DOM
+            // Pindah tampilan ke tab Generator (Menu 1)
             document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
             document.getElementById('view-generator').classList.add('active');
 
-            // Beri jeda sejenak agar browser selesai merender ukuran layout CSS container foto
-            await new Promise(resolve => setTimeout(resolve, 150));
+            // Beri jeda render DOM agar kontainer CSS benar-benar terbentuk di komputer manapun
+            await new Promise(resolve => setTimeout(resolve, 300));
 
-            // 3. Fungsi helper async untuk mendownload dan merender gambar ke kanvas
-            function loadImageToCanvasAsync(canvasId, imageUrl) {
+            // 3. Fungsi helper async untuk render gambar dengan ukuran stabil
+            function loadImageToCanvasAsync(canvasId, imageUrl, fixedWidth, fixedHeight) {
                 return new Promise((resolve) => {
                     const canvas = document.getElementById(canvasId);
                     if (!canvas || !imageUrl || imageUrl.trim() === "" || imageUrl === "NULL") {
@@ -1355,9 +1355,9 @@
                         return;
                     }
                     
-                    // Paksa ukuran kanvas mengikuti lebar/tinggi elemen aslinya
-                    canvas.width = canvas.offsetWidth || (isFourPhotos ? 350 : 350);
-                    canvas.height = canvas.offsetHeight || (isFourPhotos ? 420 : 360);
+                    // Paksa ukuran piksel canvas agar konsisten saat dicetak di komputer lain
+                    canvas.width = fixedWidth;
+                    canvas.height = fixedHeight;
                     
                     const ctx = canvas.getContext('2d');
                     const img = new Image();
@@ -1381,7 +1381,7 @@
                     };
                     
                     img.onerror = function() {
-                        console.error("Gagal memuat gambar dari URL:", imageUrl);
+                        console.error("Gagal memuat gambar:", imageUrl);
                         resolve();
                     };
                     
@@ -1389,29 +1389,28 @@
                 });
             }
 
-            // 4. Tunggu SEMUA foto selesai di-load ke kanvas secara bersamaan
+            // 4. Eksekusi render foto dengan dimensi standar cetak (Lebar x Tinggi piksel fix)
             if (isFourPhotos) {
                 await Promise.all([
-                    loadImageToCanvasAsync('canvas4_1', row.foto_1),
-                    loadImageToCanvasAsync('canvas4_2', row.foto_2),
-                    loadImageToCanvasAsync('canvas4_3', row.foto_3),
-                    loadImageToCanvasAsync('canvas4_4', row.foto_4)
+                    loadImageToCanvasAsync('canvas4_1', row.foto_1, 600, 450),
+                    loadImageToCanvasAsync('canvas4_2', row.foto_2, 600, 450),
+                    loadImageToCanvasAsync('canvas4_3', row.foto_3, 600, 450),
+                    loadImageToCanvasAsync('canvas4_4', row.foto_4, 600, 450)
                 ]);
             } else {
                 await Promise.all([
-                    loadImageToCanvasAsync('canvas1', row.foto_1),
-                    loadImageToCanvasAsync('canvas2', row.foto_2)
+                    loadImageToCanvasAsync('canvas1', row.foto_1, 700, 480),
+                    loadImageToCanvasAsync('canvas2', row.foto_2, 700, 480)
                 ]);
             }
 
-            // 5. Setelah semua foto benar-benar siap, tutup loading dan cetak
+            // 5. Sembunyikan loading dan beri jeda kestabilan frame sebelum memunculkan print dialog
             hideLoading();
             
-            // Jeda ekstra 300ms untuk memastikan kestabilan frame browser sebelum dialog print muncul
             setTimeout(() => {
                 window.print();
 
-                // Kembalikan posisi aktif ke Menu 4 (Riwayat) setelah selesai mencetak
+                // Kembalikan ke menu riwayat setelah selesai
                 setTimeout(() => {
                     document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
                     document.getElementById('view-history-ba').classList.add('active');
@@ -1423,9 +1422,8 @@
                     document.getElementById('pageTitle').textContent = '4. Riwayat Berita Acara';
                 }, 500);
 
-            }, 300);
+            }, 600);
         }
-
         async function compressImage(file, maxWidth = 1024, maxHeight = 1024, quality = 0.7) {
             return new Promise((resolve) => {
                 if (!file.type.startsWith('image/')) { resolve(file); return; }

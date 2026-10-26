@@ -1278,7 +1278,7 @@
         }
 
 async function cetakBeritaAcaraDariDB(row) {
-            showLoading("Menyiapkan dokumen & menyelaraskan tata letak 4 foto...");
+            showLoading("Menyiapkan dokumen & resolusi foto HD...");
 
             // 1. Masukkan data teks ke form Menu 1
             document.getElementById('baMerk').value = row.merk || 'HINO';
@@ -1330,7 +1330,7 @@ async function cetakBeritaAcaraDariDB(row) {
                 });
             }
 
-            // 2. Cek apakah ini template 4 foto atau 2 foto
+            // 2. Tentukan apakah template 4 foto atau 2 foto yang aktif
             const isFourPhotos = (row.foto_3 && row.foto_3.trim() !== "") || (row.foto_4 && row.foto_4.trim() !== "");
             
             if (isFourPhotos) {
@@ -1343,11 +1343,11 @@ async function cetakBeritaAcaraDariDB(row) {
             document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
             document.getElementById('view-generator').classList.add('active');
 
-            // Beri jeda render DOM agar kontainer CSS benar-benar terbentuk di komputer manapun
+            // Beri jeda render DOM agar kontainer CSS siap
             await new Promise(resolve => setTimeout(resolve, 300));
 
-            // 3. Fungsi helper async untuk render gambar dengan ukuran stabil
-            function loadImageToCanvasAsync(canvasId, imageUrl, fixedWidth, fixedHeight) {
+            // 3. Fungsi helper dengan resolusi HD (High Quality Rendering)
+            function loadHdImageToCanvasAsync(canvasId, imageUrl) {
                 return new Promise((resolve) => {
                     const canvas = document.getElementById(canvasId);
                     if (!canvas || !imageUrl || imageUrl.trim() === "" || imageUrl === "NULL") {
@@ -1355,15 +1355,16 @@ async function cetakBeritaAcaraDariDB(row) {
                         return;
                     }
                     
-                    // Paksa ukuran piksel canvas agar konsisten saat dicetak di komputer lain
-                    canvas.width = fixedWidth;
-                    canvas.height = fixedHeight;
-                    
-                    const ctx = canvas.getContext('2d');
                     const img = new Image();
                     img.crossOrigin = "anonymous";
                     
                     img.onload = function() {
+                        // Gunakan skala High-DPI (2x lipat dari ukuran kotak CSS agar sangat tajam saat dicetak)
+                        const scale = 2;
+                        canvas.width = (canvas.offsetWidth || (isFourPhotos ? 350 : 350)) * scale;
+                        canvas.height = (canvas.offsetHeight || (isFourPhotos ? 420 : 360)) * scale;
+                        
+                        const ctx = canvas.getContext('2d');
                         ctx.fillStyle = "#ffffff";
                         ctx.fillRect(0, 0, canvas.width, canvas.height);
                         
@@ -1389,22 +1390,22 @@ async function cetakBeritaAcaraDariDB(row) {
                 });
             }
 
-            // 4. Eksekusi render foto dengan dimensi standar cetak (Lebar x Tinggi piksel fix)
+            // 4. Eksekusi render HD untuk semua foto
             if (isFourPhotos) {
                 await Promise.all([
-                    loadImageToCanvasAsync('canvas4_1', row.foto_1, 600, 450),
-                    loadImageToCanvasAsync('canvas4_2', row.foto_2, 600, 450),
-                    loadImageToCanvasAsync('canvas4_3', row.foto_3, 600, 450),
-                    loadImageToCanvasAsync('canvas4_4', row.foto_4, 600, 450)
+                    loadHdImageToCanvasAsync('canvas4_1', row.foto_1),
+                    loadHdImageToCanvasAsync('canvas4_2', row.foto_2),
+                    loadHdImageToCanvasAsync('canvas4_3', row.foto_3),
+                    loadHdImageToCanvasAsync('canvas4_4', row.foto_4)
                 ]);
             } else {
                 await Promise.all([
-                    loadImageToCanvasAsync('canvas1', row.foto_1, 700, 480),
-                    loadImageToCanvasAsync('canvas2', row.foto_2, 700, 480)
+                    loadHdImageToCanvasAsync('canvas1', row.foto_1),
+                    loadHdImageToCanvasAsync('canvas2', row.foto_2)
                 ]);
             }
 
-            // 5. Sembunyikan loading dan beri jeda kestabilan frame sebelum memunculkan print dialog
+            // 5. Sembunyikan loading dan cetak dokumen
             hideLoading();
             
             setTimeout(() => {
